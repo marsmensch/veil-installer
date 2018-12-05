@@ -24,6 +24,18 @@ declare -r NODE_DAEMON=${NODE_DAEMON:-/usr/local/bin/veild}
 declare -r NODE_INBOUND_PORT=${MNODE_INBOUND_PORT:-8223}
 declare -r GIT_URL="https://github.com/paddingtonsoftware/veil"
 declare -r SCVERSION="master"
+declare -r SSH_INBOUND_PORT=${SSH_INBOUND_PORT:-22}
+declare -r SYSTEMD_CONF=${SYSTEMD_CONF:-/etc/systemd/system}
+declare -r NETWORK_CONFIG=${NETWORK_CONFIG:-/etc/rc.local}
+declare -r NETWORK_TYPE=${NETWORK_TYPE:-4}
+declare -r ETH_INTERFACE=${ETH_INTERFACE:-ens3}
+declare -r NODE_CONF_BASE=${NODE_CONF_BASE:-/etc/nodes}
+declare -r NODE_DATA_BASE=${NODE_DATA_BASE:-/var/lib/nodes}
+declare -r NODE_USER=${NODE_USER:-veil}
+declare -r NODE_HELPER="/usr/local/bin/start_veil_nodes"
+declare -r NODE_SWAPSIZE=${NODE_SWAPSIZE:-5000}
+declare -r CODE_DIR="code"
+declare -r SETUP_NODES_COUNT=${SETUP_MODES_COUNT:-1}
 
 function showbanner() {
 echo $(tput bold)$(tput setaf 2)
@@ -714,11 +726,6 @@ if [ "$wipe" -eq 1 ]; then
     exit 0
 fi
 
-#################################################
-# source default config before everything else
-source ${SCRIPTPATH}/config/default.env
-#################################################
-
 main() {
 
     echo "starting" &> ${SCRIPT_LOGFILE}
@@ -734,45 +741,19 @@ main() {
         echo "NETWORK_CONFIG:       ${NETWORK_CONFIG}"
         echo "NETWORK_TYPE:         ${NETWORK_TYPE}"
         echo "ETH_INTERFACE:        ${ETH_INTERFACE}"
-        echo "NODE_CONF_BASE:      ${NODE_CONF_BASE}"
-        echo "NODE_DATA_BASE:      ${NODE_DATA_BASE}"
-        echo "NODE_USER:           ${NODE_USER}"
-        echo "MNODE_HELPER:         ${MNODE_HELPER}"
-        echo "MNODE_SWAPSIZE:       ${MNODE_SWAPSIZE}"
+        echo "NODE_CONF_BASE:       ${NODE_CONF_BASE}"
+        echo "NODE_DATA_BASE:       ${NODE_DATA_BASE}"
+        echo "NODE_USER:            ${NODE_USER}"
+        echo "NODE_HELPER:          ${NODE_HELPER}"
+        echo "NODE_SWAPSIZE:        ${NODE_SWAPSIZE}"
         echo "NETWORK_BASE_TAG:     ${NETWORK_BASE_TAG}"        
         echo "CODE_DIR:             ${CODE_DIR}"
         echo "SCVERSION:            ${SCVERSION}"
         echo "RELEASE:              ${release}"
-        echo "SETUP_MNODES_COUNT:   ${SETUP_MNODES_COUNT}"
+        echo "SETUP_NODES_COUNT:    ${SETUP_NODES_COUNT}"
         echo "END DEFAULTS => "
     fi
 
-    # source project configuration
-    source_config ${project}
-
-    # debug
-    if [ "$debug" -eq 1 ]; then
-        echo "START PROJECT => "
-        echo "CODENAME:             $CODENAME"
-        echo "SETUP_MNODES_COUNT:   ${SETUP_MNODES_COUNT}"
-        echo "NODE_DAEMON:         ${NODE_DAEMON}"
-        echo "MNODE_INBOUND_PORT:   ${MNODE_INBOUND_PORT}"
-        echo "GIT_URL:              ${GIT_URL}"
-        echo "SCVERSION:            ${SCVERSION}"
-        echo "RELEASE:              ${release}"
-        echo "NETWORK_BASE_TAG:     ${NETWORK_BASE_TAG}"
-        echo "END PROJECT => "
-
-        echo "START OPTIONS => "
-        echo "RELEASE: ${release}"
-        echo "PROJECT: ${project}"
-        echo "SETUP_MNODES_COUNT: ${count}"
-        echo "NETWORK_TYPE: ${NETWORK_TYPE}"
-        echo "NETWORK_TYPE: ${net}"
-
-        echo "END OPTIONS => "
-        echo "********************** VALUES AFTER CONFIG SOURCING: ************************"
-    fi
 }
 
 main "$@"

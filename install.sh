@@ -390,19 +390,15 @@ function source_config() {
         echo "**** MAIN TRIGGER ****"
 
         # main routine
-        if [ "$update" -eq 0 ]; then
-            prepare_node_interfaces
-            swaphack
-        fi
+        prepare_node_interfaces
+        swaphack
         install_packages
         build_node_from_source
-        if [ "$update" -eq 0 ]; then
-            create_node_user
-            create_node_dirs
-            configure_firewall
-            create_node_configuration
-            create_systemd_configuration
-        fi
+        create_node_user
+        create_node_dirs
+        configure_firewall
+        create_node_configuration
+        create_systemd_configuration
         set_permissions
         cleanup_after
         showbanner

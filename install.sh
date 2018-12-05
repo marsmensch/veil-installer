@@ -657,14 +657,6 @@ while true; do
             shift;
             help;
             ;;
-        -p|--project)
-            shift;
-                    if [ -n "$1" ];
-                    then
-                        project="$1";
-                        shift;
-                    fi
-            ;;
         -n|--net)
             shift;
                     if [ -n "$1" ];

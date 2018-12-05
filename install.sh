@@ -86,16 +86,12 @@ function show_help(){
     showbanner
     echo "veil node installer, version $SCRIPT_VERSION";
     echo "Usage example:";
-    echo "install.sh [(-h|--help)] [(-n|--net) int] [(-c|--count) int] [(-r|--release) string] [(-w|--wipe)] [(-u|--update)] [(-x|--startnodes)]";
+    echo "install.sh [(-h|--help)] [(-n|--net) int] [(-c|--count) int] [(-w|--wipe)]";
     echo "Options:";
     echo "-h or --help: Displays this information.";
     echo "-n or --net: IP address type t be used (4 vs. 6).";
     echo "-c or --count: Number of nodes to be installed.";
-    echo "-r or --release: Release version to be installed.";
     echo "-w or --wipe: Wipe ALL local data for a node type.";
-    echo "-u or --update: Update a specific node daemon.";
-    echo "-r or --release: Release version to be installed.";
-    echo "-x or --startnodes: Start nodes after installation to sync with blockchain";
     
     echo "exit 1"
     exit 1;
@@ -469,7 +465,7 @@ function final_call() {
 
     # place future helper script accordingly on fresh install
     if [ "$update" -eq 0 ]; then
-        cp ${SCRIPTPATH}/scripts/start_veil_nodes ${MNODE_HELPER}_${CODENAME}
+        cp ${SCRIPTPATH}/start_veil_nodes ${MNODE_HELPER}_${CODENAME}
         echo "">> ${MNODE_HELPER}_${CODENAME}
 
         for NUM in $(seq 1 ${count}); do

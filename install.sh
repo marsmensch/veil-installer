@@ -641,7 +641,7 @@ update=0;
 startnodes=0;
 
 # Execute getopt
-ARGS=$(getopt -o "hp:n:c:r:wsudx" -l "help,project:,net:,count:,release:,wipe,update,debug,startnodes" -n "install.sh" -- "$@");
+ARGS=$(getopt -o "h:n:c:r:wsudx" -l "help,net:,count:,release:,wipe,update,debug,startnodes" -n "install.sh" -- "$@");
 
 #Bad arguments
 if [ $? -ne 0 ];

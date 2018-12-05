@@ -68,11 +68,6 @@ echo "$(tput setaf 6)Donations (BTC): 33ENWZ9RCYBG7nv6ac8KxBUSuQX64Hx3x3"
 echo "Questions: marsmensch@protonmail.com$(tput sgr0)"
 }
 
-# /*
-# confirmation message as optional parameter, asks for confirmation
-# get_confirmation && COMMAND_TO_RUN or prepend a message
-# */
-#
 function get_confirmation() {
     # call with a prompt string or use a default
     read -r -p "${1:-Are you sure? [y/N]} " response
@@ -86,9 +81,6 @@ function get_confirmation() {
     esac
 }
 
-#
-# /* no parameters, displays the help message */
-#
 function show_help(){
     clear
     showbanner
@@ -109,9 +101,6 @@ function show_help(){
     exit 1;
 }
 
-#
-# /* no parameters, checks if we are running on a supported Ubuntu release */
-#
 function check_distro() {
 
     # currently only for Ubuntu 16.04 & 18.04
@@ -128,9 +117,6 @@ function check_distro() {
     fi
 }
 
-#
-# /* no parameters, installs the base set of packages that are required for all projects */
-#
 function install_packages() {
     # development and build packages
     # these are common on all cryptos
@@ -147,7 +133,6 @@ function install_packages() {
 	    apt-get -y install libdb4.8-dev libdb4.8++-dev &>> ${SCRIPT_LOGFILE}
 
 }
-
 
 function swaphack() {
 #check if swap is available
@@ -384,32 +369,10 @@ function source_config() {
             echo "net EMPTY, setting to default: ${NETWORK_TYPE}" &>> ${SCRIPT_LOGFILE}
         fi
 
-        # main block of function logic starts here
-        # if update flag was given, check if all required mn-helper files exist
-        if [ "$update" -eq 1 ]; then
-            if [ ! -f ${NODE_DAEMON} ]; then
-                echo "UPDATE FAILED! Daemon hasn't been found. Please try the normal installation process by omitting the upgrade parameter."
-                exit 1
-            fi
-            if [ ! -f ${MNODE_HELPER}_${CODENAME} ]; then
-                echo "UPDATE FAILED! Masternode activation file ${MNODE_HELPER}_${CODENAME} hasn't been found. Please try the normal installation process by omitting the upgrade parameter."
-                exit 1
-            fi
-            if [ ! -d ${NODE_DATA_BASE} ]; then
-                echo "UPDATE FAILED! ${NODE_DATA_BASE} hasn't been found. Please try the normal installation process by omitting the upgrade parameter."
-                exit 1
-            fi
-        fi
-
         echo "************************* Installation Plan *****************************************"
         echo ""
-        if [ "$update" -eq 1 ]; then
-            echo "I am going to update your existing "
-            echo "$(tput bold)$(tput setaf 2) => ${project} node(s) in version ${release} $(tput sgr0)"
-        else
-            echo "I am going to install and configure "
-            echo "$(tput bold)$(tput setaf 2) => ${count} ${project} node(s) in version ${release} $(tput sgr0)"
-        fi
+        echo "I am going to install and configure "
+        echo "$(tput bold)$(tput setaf 2) => ${count} ${project} node(s) in version ${release} $(tput sgr0)"
         echo "for you now."
         echo ""
         echo "Stay tuned!"
@@ -420,10 +383,6 @@ function source_config() {
             echo "IPV4WARNING:"
         fi
 
-        # start nodes after setup
-        if [ "$startnodes" -eq 1 ]; then
-            echo "I will start your nodes after the installation."
-        fi
         echo ""
         echo "A logfile for this run can be found at the following location:"
         echo "${SCRIPT_LOGFILE}"
@@ -500,6 +459,7 @@ function build_node_from_source() {
 }
 
 function final_call() {
+
     # note outstanding tasks that need manual work
     echo "************! ALMOST DONE !******************************"
     echo "=> $(tput bold)$(tput setaf 2) All configuration files are in: ${NODE_CONF_BASE} $(tput sgr0)"
@@ -527,6 +487,7 @@ function final_call() {
         ${MNODE_HELPER}_${CODENAME}
     fi
     tput sgr0
+    
 }
 
 #
@@ -614,11 +575,9 @@ function prepare_node_interfaces() {
 # Declare vars. Flags initalizing to 0.
 wipe=0;
 debug=0;
-update=0;
-startnodes=0;
 
 # Execute getopt
-ARGS=$(getopt -o "h:n:c:r:wsudx" -l "help,net:,count:,release:,wipe,update,debug,startnodes" -n "install.sh" -- "$@");
+ARGS=$(getopt -o "h:n:c:r:wd" -l "help,net:,count:,wipe,debug" -n "install.sh" -- "$@");
 
 eval set -- "$ARGS";
 
@@ -626,6 +585,7 @@ while true; do
     case "$1" in
         -h|--help)
             shift;
+            # show help?!?
             ;;
         -n|--net)
             shift;
@@ -643,32 +603,14 @@ while true; do
                         shift;
                     fi
             ;;
-        -r|--release)
-            shift;
-                    if [ -n "$1" ];
-                    then
-                        release="$1";
-                        SCVERSION="$1"
-                        shift;
-                    fi
-            ;;
         -w|--wipe)
             shift;
                     wipe="1";
-            ;;
-        -u|--update)
-            shift;
-                    update="1";
             ;;
         -d|--debug)
             shift;
                     debug="1";
             ;;
-        -x|--startnodes)
-            shift;
-                    startnodes="1";
-            ;;
-
         --)
             shift;
             break;

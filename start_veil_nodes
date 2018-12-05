@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+# version 	0.1-alpha
+# date    	2018-12-05
+#
+# function	veil node setup script
+#			This scripts needs to be run as root
+# 			to make services start persistent
+#
+# Twitter 	@marsmensch
+#
+
+##### THIS PART IS GENERATED ######	

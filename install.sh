@@ -460,18 +460,16 @@ function final_call() {
     echo "$(tput bold)$(tput setaf 1)Important:$(tput sgr0) run $(tput setaf 2) /usr/local/bin/start_veil_nodes $(tput sgr0) as root to activate your nodes."
 
     # place future helper script accordingly on fresh install
-    if [ "$update" -eq 0 ]; then
-        cp ${SCRIPTPATH}/start_veil_nodes ${MNODE_HELPER}_${CODENAME}
-        echo "">> ${MNODE_HELPER}_${CODENAME}
+    cp ${SCRIPTPATH}/start_veil_nodes ${MNODE_HELPER}_${CODENAME}
+    echo "">> ${MNODE_HELPER}_${CODENAME}
 
-        for NUM in $(seq 1 ${count}); do
-            echo "systemctl daemon-reload" >> ${MNODE_HELPER}_${CODENAME}
-            echo "systemctl enable ${CODENAME}_n${NUM}" >> ${MNODE_HELPER}_${CODENAME}
-            echo "systemctl restart ${CODENAME}_n${NUM}" >> ${MNODE_HELPER}_${CODENAME}
-        done
+    for NUM in $(seq 1 ${count}); do
+        echo "systemctl daemon-reload" >> ${MNODE_HELPER}_${CODENAME}
+        echo "systemctl enable ${CODENAME}_n${NUM}" >> ${MNODE_HELPER}_${CODENAME}
+        echo "systemctl restart ${CODENAME}_n${NUM}" >> ${MNODE_HELPER}_${CODENAME}
+    done
 
-        chmod u+x ${MNODE_HELPER}_${CODENAME}
-    fi
+    chmod u+x ${MNODE_HELPER}_${CODENAME}
 
     if [ "$startnodes" -eq 1 ]; then
         echo ""

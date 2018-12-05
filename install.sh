@@ -1,16 +1,15 @@
 #!/bin/bash
+#set -x
 #
 #   version 	v0.1
 #   date    	2018-12-05
 #
-#   function:	install and configure a veil node
-#
-# 				Run this script w/ the desired parameters. Leave blank or use -h for help.
+#   function:	Install and configure a veil node
+# 		Run this script w/ the desired parameters. Leave blank or use -h for help.
 #
 # Twitter 	@marsmensch
 
 # Useful variables
-declare -r CRYPTOS=`ls -l config/ | egrep '^d' | awk '{print $9}' | xargs echo -n; echo`
 declare -r DATE_STAMP="$(date +%y-%m-%d-%s)"
 declare -r SCRIPTPATH="$(cd $(dirname ${BASH_SOURCE[0]}) > /dev/null; pwd -P)"
 declare -r MASTERPATH="$(dirname "${SCRIPTPATH}")"
@@ -27,8 +26,6 @@ declare -r SCVERSION="master"
 declare -r SSH_INBOUND_PORT=${SSH_INBOUND_PORT:-22}
 declare -r SYSTEMD_CONF=${SYSTEMD_CONF:-/etc/systemd/system}
 declare -r NETWORK_CONFIG=${NETWORK_CONFIG:-/etc/rc.local}
-declare -r NETWORK_TYPE=${NETWORK_TYPE:-4}
-declare -r ETH_INTERFACE=${ETH_INTERFACE:-ens3}
 declare -r NODE_CONF_BASE=${NODE_CONF_BASE:-/etc/nodes}
 declare -r NODE_DATA_BASE=${NODE_DATA_BASE:-/var/lib/nodes}
 declare -r NODE_USER=${NODE_USER:-veil}
@@ -36,6 +33,8 @@ declare -r NODE_HELPER="/usr/local/bin/start_veil_nodes"
 declare -r NODE_SWAPSIZE=${NODE_SWAPSIZE:-5000}
 declare -r CODE_DIR="code"
 declare -r SETUP_NODES_COUNT=${SETUP_MODES_COUNT:-1}
+NETWORK_TYPE=${NETWORK_TYPE:-4}
+ETH_INTERFACE=${ETH_INTERFACE:-ens3}
 
 function showbanner() {
 echo $(tput bold)$(tput setaf 2)
@@ -102,9 +101,11 @@ function show_help(){
     echo "-c or --count: Number of nodes to be installed.";
     echo "-r or --release: Release version to be installed.";
     echo "-w or --wipe: Wipe ALL local data for a node type.";
-    echo "-u or --update: Update a specific masternode daemon.";
+    echo "-u or --update: Update a specific node daemon.";
     echo "-r or --release: Release version to be installed.";
-    echo "-x or --startnodes: Start masternodes after installation to sync with blockchain";
+    echo "-x or --startnodes: Start nodes after installation to sync with blockchain";
+    
+    echo "exit 1"
     exit 1;
 }
 
@@ -112,6 +113,7 @@ function show_help(){
 # /* no parameters, checks if we are running on a supported Ubuntu release */
 #
 function check_distro() {
+
     # currently only for Ubuntu 16.04 & 18.04
     if [[ -r /etc/os-release ]]; then
         . /etc/os-release
@@ -136,11 +138,13 @@ function install_packages() {
     add-apt-repository -yu ppa:bitcoin/bitcoin  &>> ${SCRIPT_LOGFILE}
     apt-get -qq -o=Dpkg::Use-Pty=0 -o=Acquire::ForceIPv4=true update  &>> ${SCRIPT_LOGFILE}
     apt-get -qqy -o=Dpkg::Use-Pty=0 -o=Acquire::ForceIPv4=true install build-essential libtool \
-            autotools-dev automake pkg-config bsdmainutils python3 libssl-dev jp2a \
+            autotools-dev automake pkg-config pv bsdmainutils python3 libssl-dev \
             libevent-dev libboost-system-dev libboost-filesystem-dev git libboost-chrono-dev \
             libboost-test-dev libboost-thread-dev software-properties-common libqt5gui5 \
             libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev \
-            protobuf-compiler unzip libqrencode-dev libgmp-dev net-tools  &>> ${SCRIPT_LOGFILE}
+            protobuf-compiler unzip libqrencode-dev libgmp-dev net-tools && 
+            add-apt-repository -y ppa:bitcoin/bitcoin && 
+	    apt-get -y install libdb4.8-dev libdb4.8++-dev &>> ${SCRIPT_LOGFILE}
 
 }
 
@@ -151,8 +155,8 @@ if [ $(free | awk '/^Swap:/ {exit !$2}') ] || [ ! -f "/var/node_swap.img" ];then
     echo "* No proper swap, creating it"
     # needed because ant servers are ants
     rm -f /var/node_swap.img
-    dd if=/dev/zero of=/var/node_swap.img bs=1024k count=${MNODE_SWAPSIZE} &>> ${SCRIPT_LOGFILE}
-    chmod 0600 /var/node_swap.img
+    dd if=/dev/zero of=/var/node_swap.img bs=1024k count=${NODE_SWAPSIZE} &>> ${SCRIPT_LOGFILE}
+    chmod 0600 /var/node_swap.img &>> ${SCRIPT_LOGFILE}
     mkswap /var/node_swap.img &>> ${SCRIPT_LOGFILE}
     swapon /var/node_swap.img &>> ${SCRIPT_LOGFILE}
     echo '/var/node_swap.img none swap sw 0 0' | tee -a /etc/fstab &>> ${SCRIPT_LOGFILE}
@@ -192,7 +196,7 @@ function create_node_dirs() {
 function configure_firewall() {
 
     echo "* Configuring firewall rules"
-    # disallow everything except ssh and masternode inbound ports
+    # disallow everything except ssh and node inbound ports
     ufw default deny                          &>> ${SCRIPT_LOGFILE}
     ufw logging on                            &>> ${SCRIPT_LOGFILE}
     ufw allow ${SSH_INBOUND_PORT}/tcp         &>> ${SCRIPT_LOGFILE}
@@ -225,32 +229,30 @@ function validate_netchoice() {
 
 function create_node_configuration() {
 
+        echo "in create_node_configuration"
+
         # always return to the script root
         cd ${SCRIPTPATH}
 
-        # create one config file per masternode
+        # create one config file per node
         for NUM in $(seq 1 ${count}); do
         PASS=$(date | md5sum | cut -c1-24)
 
             # we dont want to overwrite an existing config file
             if [ ! -f ${NODE_CONF_BASE}/${CODENAME}_n${NUM}.conf ]; then
-                echo "individual masternode config doesn't exist, generate it!"                  &>> ${SCRIPT_LOGFILE}
+                echo "individual node config doesn't exist, generate it!"                  &>> ${SCRIPT_LOGFILE}
 
                 # if a template exists, use this instead of the default
-                if [ -e config/${CODENAME}/${CODENAME}.conf ]; then
-                    echo "custom configuration template for ${CODENAME} found, use this instead"                      &>> ${SCRIPT_LOGFILE}
-                    cp ${SCRIPTPATH}/config/${CODENAME}/${CODENAME}.conf ${NODE_CONF_BASE}/${CODENAME}_n${NUM}.conf  &>> ${SCRIPT_LOGFILE}
+                if [ -e ${CODENAME}.conf ]; then
+                    echo "custom configuration template for ${CODENAME} found, use this instead"  &>> ${SCRIPT_LOGFILE}
+                    cp ${SCRIPTPATH}/${CODENAME}.conf ${NODE_CONF_BASE}/${CODENAME}_n${NUM}.conf  &>> ${SCRIPT_LOGFILE}
                 else
-                    echo "No ${CODENAME} template found, using the default configuration template"			          &>> ${SCRIPT_LOGFILE}
+                    echo "No ${CODENAME} template found, using the default configuration template"	             &>> ${SCRIPT_LOGFILE}
                     cp ${SCRIPTPATH}/config/default.conf ${NODE_CONF_BASE}/${CODENAME}_n${NUM}.conf                  &>> ${SCRIPT_LOGFILE}
                 fi
                 # replace placeholders
                 echo "running sed on file ${NODE_CONF_BASE}/${CODENAME}_n${NUM}.conf"                                &>> ${SCRIPT_LOGFILE}
                 sed -e "s/XXX_GIT_PROJECT_XXX/${CODENAME}/" -e "s/XXX_NUM_XXY/${NUM}]/" -e "s/XXX_NUM_XXX/${NUM}/" -e "s/XXX_PASS_XXX/${PASS}/" -e "s/XXX_IPV6_INT_BASE_XXX/[${IPV6_INT_BASE}/" -e "s/XXX_NETWORK_BASE_TAG_XXX/${NETWORK_BASE_TAG}/" -e "s/XXX_MNODE_INBOUND_PORT_XXX/${MNODE_INBOUND_PORT}/" -i ${NODE_CONF_BASE}/${CODENAME}_n${NUM}.conf
-                if [ "$startnodes" -eq 1 ]; then
-                    #uncomment masternode= and masternodeprivkey= so the node can autostart and sync
-                    sed 's/\(^.*masternode\(\|privkey\)=.*$\)/#\1/' -i ${NODE_CONF_BASE}/${CODENAME}_n${NUM}.conf
-                fi
             fi
         done
 
@@ -258,8 +260,8 @@ function create_node_configuration() {
 
 function create_systemd_configuration() {
 
-    echo "* (over)writing systemd config files for masternodes"
-    # create one config file per masternode
+    echo "* (over)writing systemd config files for nodes"
+    # create one config file per node
     for NUM in $(seq 1 ${count}); do
     PASS=$(date | md5sum | cut -c1-24)
         echo "* (over)writing systemd config file ${SYSTEMD_CONF}/${CODENAME}_n${NUM}.service"  &>> ${SCRIPT_LOGFILE}
@@ -292,13 +294,13 @@ function create_systemd_configuration() {
 }
 
 #
-# /* set all permissions to the masternode user */
+# /* set all permissions to the node user */
 #
 function set_permissions() {
 
 	# maybe add a sudoers entry later
 	chown -R ${NODE_USER}:${NODE_USER} ${NODE_CONF_BASE} ${NODE_DATA_BASE} &>> ${SCRIPT_LOGFILE}
-    # make group permissions same as user, so vps-user can be added to masternode group
+    # make group permissions same as user, so vps-user can be added to node group
     chmod -R g=u ${NODE_CONF_BASE} ${NODE_DATA_BASE} &>> ${SCRIPT_LOGFILE}
 
 }
@@ -309,8 +311,8 @@ function set_permissions() {
 function wipe_all() {
 
     echo "Deleting all ${project} related data!"
-    rm -f /etc/masternodes/${project}_n*.conf
-    rmdir --ignore-fail-on-non-empty -p /var/lib/masternodes/${project}*
+    rm -f /etc/nodes/${project}_n*.conf
+    rmdir --ignore-fail-on-non-empty -p /var/lib/nodes/${project}*
     rm -f /etc/systemd/system/${project}_n*.service
     rm -f ${NODE_DAEMON}
     echo "DONE!"
@@ -353,15 +355,11 @@ function cleanup_after() {
 # source the default and desired crypto configuration files
 function source_config() {
 
-    SETUP_CONF_FILE="${SCRIPTPATH}/config/${project}/${project}.env"
-
     # first things first, to break early if things are missing or weird
     check_distro
-
-    if [ -f ${SETUP_CONF_FILE} ]; then
+        project=${CODENAME}
         echo "Script version ${SCRIPT_VERSION}, you picked: $(tput bold)$(tput setaf 2) ${project} $(tput sgr0), running on Ubuntu ${VERSION_ID}"
         echo "apply config file for ${project}"	&>> ${SCRIPT_LOGFILE}
-        source "${SETUP_CONF_FILE}"
 
         # count is from the default config but can ultimately be
         # overwritten at runtime
@@ -407,34 +405,24 @@ function source_config() {
         echo ""
         if [ "$update" -eq 1 ]; then
             echo "I am going to update your existing "
-            echo "$(tput bold)$(tput setaf 2) => ${project} masternode(s) in version ${release} $(tput sgr0)"
+            echo "$(tput bold)$(tput setaf 2) => ${project} node(s) in version ${release} $(tput sgr0)"
         else
             echo "I am going to install and configure "
-            echo "$(tput bold)$(tput setaf 2) => ${count} ${project} masternode(s) in version ${release} $(tput sgr0)"
+            echo "$(tput bold)$(tput setaf 2) => ${count} ${project} node(s) in version ${release} $(tput sgr0)"
         fi
         echo "for you now."
         echo ""
-        if [ "$update" -eq 0 ]; then
-            # only needed if fresh installation
-            echo "You have to add your masternode private key to the individual config files afterwards"
-            echo ""
-        fi
         echo "Stay tuned!"
         echo ""
         # show a hint for MANUAL IPv4 configuration
         if [ "${net}" -eq 4 ]; then
             NETWORK_TYPE=4
-            echo "WARNING:"
-            echo "You selected IPv4 for networking but there is no automatic workflow for this part."
-            echo "This means you will have some mamual work to do to after this configuration run."
-            echo ""
-            echo "See the following link for instructions how to add multiple ipv4 addresses on vultr:"
-            echo "${IPV4_DOC_LINK}"
+            echo "IPV4WARNING:"
         fi
 
         # start nodes after setup
         if [ "$startnodes" -eq 1 ]; then
-            echo "I will start your masternodes after the installation."
+            echo "I will start your nodes after the installation."
         fi
         echo ""
         echo "A logfile for this run can be found at the following location:"
@@ -443,13 +431,15 @@ function source_config() {
         echo "*************************************************************************************"
         sleep 5
 
+
+        echo "**** MAIN TRIGGER ****"
+
         # main routine
         if [ "$update" -eq 0 ]; then
             prepare_node_interfaces
             swaphack
         fi
         install_packages
-        print_logo
         build_node_from_source
         if [ "$update" -eq 0 ]; then
             create_node_user
@@ -462,14 +452,13 @@ function source_config() {
         cleanup_after
         showbanner
         final_call
-    else
-        echo "required file ${SETUP_CONF_FILE} does not exist, abort!"
-        exit 1
-    fi
 
 }
 
 function build_node_from_source() {
+
+        echo "build_from_source"
+
         # daemon not found compile it
         if [ ! -f ${NODE_DAEMON} ] || [ "$update" -eq 1 ]; then
                 # create code directory if it doesn't exist
@@ -492,27 +481,24 @@ function build_node_from_source() {
                     rm -f ${NODE_DAEMON}
                     # old daemon must be removed before compilation. Would be better to remove it afterwards, however not possible with current structure
                     if [ -f ${NODE_DAEMON} ]; then
-                            echo "UPDATE FAILED! Daemon ${NODE_DAEMON} couldn't be removed. Please open an issue at https://github.com/masternodes/vps/issues. Thank you!"
+                            echo "UPDATE FAILED!"
                             exit 1
                     fi
                 fi
 
                 # compilation starts here
-                source ${SCRIPTPATH}/config/${CODENAME}/${CODENAME}.compile | pv -t -i0.1
+                source ${SCRIPTPATH}/${CODENAME}.compile | pv -t -i0.1
         else
                 echo "* Daemon already in place at ${NODE_DAEMON}, not compiling"
         fi
 
         # if it's not available after compilation, theres something wrong
         if [ ! -f ${NODE_DAEMON} ]; then
-                echo "COMPILATION FAILED! Please open an issue at https://github.com/masternodes/vps/issues. Thank you!"
+                echo "COMPILATION FAILED! Sorry!"
                 exit 1
         fi
 }
 
-#
-# /* no parameters, print some (hopefully) helpful advice  */
-#
 function final_call() {
     # note outstanding tasks that need manual work
     echo "************! ALMOST DONE !******************************"
@@ -548,6 +534,8 @@ function final_call() {
 #
 function prepare_node_interfaces() {
 
+    echo "prepare interfaces"
+
     # this allows for more flexibility since every provider uses another default interface
     # current default is:
     # * ens3 (vultr) w/ a fallback to "eth0" (Hetzner, DO & Linode w/ IPv4 only)
@@ -571,17 +559,6 @@ function prepare_node_interfaces() {
     if [[ "${ETH_STATUS}" = "down" ]] || [[ "${ETH_STATUS}" = "" ]]; then
         echo "Default interface is down, fallback didn't work. Break here."
         exit 1
-    fi
-
-    # DO ipv6 fix, are we on DO?
-    # check for DO network config file
-    if [ -f ${DO_NET_CONF} ]; then
-        # found the DO config
-        if ! grep -q "::8888" ${DO_NET_CONF}; then
-            echo "ipv6 fix not found, applying!"
-            sed -i '/iface eth0 inet6 static/a dns-nameservers 2001:4860:4860::8844 2001:4860:4860::8888 8.8.8.8 127.0.0.1' ${DO_NET_CONF} &>> ${SCRIPT_LOGFILE}
-            ifdown ${ETH_INTERFACE}; ifup ${ETH_INTERFACE}; &>> ${SCRIPT_LOGFILE}
-        fi
     fi
 
     IPV6_INT_BASE="$(ip -6 addr show dev ${ETH_INTERFACE} | grep inet6 | awk -F '[ \t]+|/' '{print $3}' | grep -v ^fe80 | grep -v ^::1 | cut -f1-4 -d':' | head -1)" &>> ${SCRIPT_LOGFILE}
@@ -614,9 +591,9 @@ function prepare_node_interfaces() {
             ip -6 addr | grep -qi "${IPV6_INT_BASE}:${NETWORK_BASE_TAG}::${NUM}"
             if [ $? -eq 0 ]
             then
-              echo "IP for masternode already exists, skipping creation" &>> ${SCRIPT_LOGFILE}
+              echo "IP for node already exists, skipping creation" &>> ${SCRIPT_LOGFILE}
             else
-              echo "Creating new IP address for ${CODENAME} masternode nr ${NUM}" &>> ${SCRIPT_LOGFILE}
+              echo "Creating new IP address for ${CODENAME} node nr ${NUM}" &>> ${SCRIPT_LOGFILE}
               if [ "${NETWORK_CONFIG}" = "/etc/rc.local" ]; then
                 # need to put network config in front of "exit 0" in rc.local
                 sed -e '$i ip -6 addr add '"${IPV6_INT_BASE}"':'"${NETWORK_BASE_TAG}"'::'"${NUM}"'/64 dev '"${ETH_INTERFACE}"'\n' -i ${NETWORK_CONFIG} &>> ${SCRIPT_LOGFILE}
@@ -643,19 +620,12 @@ startnodes=0;
 # Execute getopt
 ARGS=$(getopt -o "h:n:c:r:wsudx" -l "help,net:,count:,release:,wipe,update,debug,startnodes" -n "install.sh" -- "$@");
 
-#Bad arguments
-if [ $? -ne 0 ];
-then
-    help;
-fi
-
 eval set -- "$ARGS";
 
 while true; do
     case "$1" in
         -h|--help)
             shift;
-            help;
             ;;
         -n|--net)
             shift;
@@ -705,13 +675,7 @@ while true; do
             ;;
     esac
 done
-
-# Check required arguments
-if [ -z "$project" ]
-then
-    show_help;
-fi
-
+	    
 # Check required arguments
 if [ "$wipe" -eq 1 ]; then
     get_confirmation "Would you really like to WIPE ALL DATA!? YES/NO y/n" && wipe_all
@@ -745,6 +709,9 @@ main() {
         echo "SETUP_NODES_COUNT:    ${SETUP_NODES_COUNT}"
         echo "END DEFAULTS => "
     fi
+
+    # source project configuration
+    source_config ${project}
 
 }
 

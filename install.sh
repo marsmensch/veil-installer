@@ -15,17 +15,14 @@ declare -r SCRIPTPATH="$(cd $(dirname ${BASH_SOURCE[0]}) > /dev/null; pwd -P)"
 declare -r MASTERPATH="$(dirname "${SCRIPTPATH}")"
 declare -r SCRIPT_VERSION="v0.1"
 declare -r SCRIPT_LOGFILE="/tmp/installer_${DATE_STAMP}_out.log"
-declare -r IPV4_DOC_LINK="https://www.vultr.com/docs/add-secondary-ipv4-address"
 declare -r DO_NET_CONF="/etc/network/interfaces.d/50-cloud-init.cfg"
-declare -r NETWORK_BASE_TAG="$(dd if=/dev/urandom bs=2 count=1 2>/dev/null | od -x -A n | sed -e 's/^[[:space:]]*//g')"
 declare -r CODENAME="veil"
 declare -r NODE_DAEMON=${NODE_DAEMON:-/usr/local/bin/veild}
-declare -r NODE_INBOUND_PORT=${MNODE_INBOUND_PORT:-8223}
+declare -r NODE_INBOUND_PORT=${NODE_INBOUND_PORT:-8223}
 declare -r GIT_URL="https://github.com/paddingtonsoftware/veil"
 declare -r SCVERSION="master"
 declare -r SSH_INBOUND_PORT=${SSH_INBOUND_PORT:-22}
 declare -r SYSTEMD_CONF=${SYSTEMD_CONF:-/etc/systemd/system}
-declare -r NETWORK_CONFIG=${NETWORK_CONFIG:-/etc/rc.local}
 declare -r NODE_CONF_BASE=${NODE_CONF_BASE:-/etc/nodes}
 declare -r NODE_DATA_BASE=${NODE_DATA_BASE:-/var/lib/nodes}
 declare -r NODE_USER=${NODE_USER:-veil}
@@ -33,7 +30,6 @@ declare -r NODE_HELPER="/usr/local/bin/start_veil_nodes"
 declare -r NODE_SWAPSIZE=${NODE_SWAPSIZE:-5000}
 declare -r CODE_DIR="code"
 declare -r SETUP_NODES_COUNT=${SETUP_MODES_COUNT:-1}
-NETWORK_TYPE=${NETWORK_TYPE:-4}
 ETH_INTERFACE=${ETH_INTERFACE:-ens3}
 
 function showbanner() {
@@ -86,10 +82,9 @@ function show_help(){
     showbanner
     echo "veil node installer, version $SCRIPT_VERSION";
     echo "Usage example:";
-    echo "install.sh [(-h|--help)] [(-n|--net) int] [(-c|--count) int] [(-w|--wipe)]";
+    echo "install.sh [(-h|--help)] [(-c|--count) int] [(-w|--wipe)]";
     echo "Options:";
     echo "-h or --help: Displays this information.";
-    echo "-n or --net: IP address type t be used (4 vs. 6).";
     echo "-c or --count: Number of nodes to be installed.";
     echo "-w or --wipe: Wipe ALL local data for a node type.";
     
@@ -124,7 +119,7 @@ function install_packages() {
             libevent-dev libboost-system-dev libboost-filesystem-dev git libboost-chrono-dev \
             libboost-test-dev libboost-thread-dev software-properties-common libqt5gui5 \
             libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev \
-            protobuf-compiler unzip libqrencode-dev libgmp-dev net-tools && 
+            protobuf-compiler moreutils unzip libqrencode-dev libgmp-dev net-tools && 
             add-apt-repository -y ppa:bitcoin/bitcoin && 
 	    apt-get -y install libdb4.8-dev libdb4.8++-dev &>> ${SCRIPT_LOGFILE}
 
@@ -182,29 +177,11 @@ function configure_firewall() {
     ufw logging on                            &>> ${SCRIPT_LOGFILE}
     ufw allow ${SSH_INBOUND_PORT}/tcp         &>> ${SCRIPT_LOGFILE}
     # KISS, its always the same port for all interfaces
-    ufw allow ${MNODE_INBOUND_PORT}/tcp       &>> ${SCRIPT_LOGFILE}
+    ufw allow ${NODE_INBOUND_PORT}/tcp       &>> ${SCRIPT_LOGFILE}
     # This will only allow 6 connections every 30 seconds from the same IP address.
     ufw limit OpenSSH	                      &>> ${SCRIPT_LOGFILE}
     ufw --force enable                        &>> ${SCRIPT_LOGFILE}
     echo "* Firewall ufw is active and enabled on system startup"
-
-}
-
-function validate_netchoice() {
-
-    echo "* Validating network rules"
-
-    # break here of net isn't 4 or 6
-    if [ ${net} -ne 4 ] && [ ${net} -ne 6 ]; then
-        echo "invalid NETWORK setting, can only be 4 or 6!"
-        exit 1;
-    fi
-
-    # generate the required ipv6 config
-    if [ "${net}" -eq 4 ]; then
-        IPV6_INT_BASE="#NEW_IPv4_ADDRESS_FOR_MASTERNODE_NUMBER"
-        echo "IPv4 address generation needs to be done manually atm!"  &>> ${SCRIPT_LOGFILE}
-    fi	# end ifneteq4
 
 }
 
@@ -233,7 +210,7 @@ function create_node_configuration() {
                 fi
                 # replace placeholders
                 echo "running sed on file ${NODE_CONF_BASE}/${CODENAME}_n${NUM}.conf"                                &>> ${SCRIPT_LOGFILE}
-                sed -e "s/XXX_GIT_PROJECT_XXX/${CODENAME}/" -e "s/XXX_NUM_XXY/${NUM}]/" -e "s/XXX_NUM_XXX/${NUM}/" -e "s/XXX_PASS_XXX/${PASS}/" -e "s/XXX_IPV6_INT_BASE_XXX/[${IPV6_INT_BASE}/" -e "s/XXX_NETWORK_BASE_TAG_XXX/${NETWORK_BASE_TAG}/" -e "s/XXX_MNODE_INBOUND_PORT_XXX/${MNODE_INBOUND_PORT}/" -i ${NODE_CONF_BASE}/${CODENAME}_n${NUM}.conf
+                sed -e "s/XXX_GIT_PROJECT_XXX/${CODENAME}/" -e "s/XXX_PASS_XXX/${PASS}/" -e "s/XXX_NUM_XXX/${NUM}/" -e "s/XXX_IPV4_ADDY_XXX/${IPV4_ADDY}/" -e "s/XXX_NODE_INBOUND_PORT_XXX/${NODE_INBOUND_PORT}/" -i ${NODE_CONF_BASE}/${CODENAME}_n${NUM}.conf
             fi
         done
 
@@ -291,11 +268,11 @@ function set_permissions() {
 #
 function wipe_all() {
 
-    echo "Deleting all ${project} related data!"
-    rm -f /etc/nodes/${project}_n*.conf
-    rmdir --ignore-fail-on-non-empty -p /var/lib/nodes/${project}*
-    rm -f /etc/systemd/system/${project}_n*.service
-    rm -f ${NODE_DAEMON}
+    echo "Deleting all ${CODENAME} related data!"
+    rm -f /etc/nodes/${CODENAME}_n*.conf                             &>> ${SCRIPT_LOGFILE}
+    rmdir --ignore-fail-on-non-empty -p /var/lib/nodes/${CODENAME}*  &>> ${SCRIPT_LOGFILE}
+    rm -f /etc/systemd/system/${CODENAME}_n*.service                 &>> ${SCRIPT_LOGFILE}
+    rm -f /usr/local/bin/${CODENAME}-* ${NODE_DAEMON} ${NODE_HELPER} &>> ${SCRIPT_LOGFILE}
     echo "DONE!"
     exit 0
 
@@ -346,24 +323,15 @@ function source_config() {
         # overwritten at runtime
         if [ -z "${count}" ]
         then
-            count=${SETUP_MNODES_COUNT}
-            echo "No number given, installing default number of nodes: ${SETUP_MNODES_COUNT}" &>> ${SCRIPT_LOGFILE}
+            count=${SETUP_NODES_COUNT}
+            echo "No number given, installing default number of nodes: ${SETUP_NODES_COUNT}" &>> ${SCRIPT_LOGFILE}
         fi
-
-        # release is from the default project config but can ultimately be
-        # overwritten at runtime
-        if [ -z "$release" ]
-        then
-            release=${SCVERSION}
-            echo "release empty, setting to project default: ${SCVERSION}"  &>> ${SCRIPT_LOGFILE}
-        fi
-
-        # net is from the default config but can ultimately be
-        # overwritten at runtime
-        if [ -z "${net}" ]; then
-            net=${NETWORK_TYPE}
-            echo "net EMPTY, setting to default: ${NETWORK_TYPE}" &>> ${SCRIPT_LOGFILE}
-        fi
+        
+        #stop if the binary is already at the right place	
+	if [ -f ${NODE_DAEMON} ]; then
+            echo "$(tput bold)$(tput setaf 1)Daemon already in place at ${NODE_DAEMON}, run ${0} -w to delete it and sync the chain from scratch.$(tput sgr0)"
+            exit 0
+        fi    
 
         echo "************************* Installation Plan *****************************************"
         echo ""
@@ -373,21 +341,12 @@ function source_config() {
         echo ""
         echo "Stay tuned!"
         echo ""
-        # show a hint for MANUAL IPv4 configuration
-        if [ "${net}" -eq 4 ]; then
-            NETWORK_TYPE=4
-            echo "IPV4WARNING:"
-        fi
-
-        echo ""
         echo "A logfile for this run can be found at the following location:"
         echo "${SCRIPT_LOGFILE}"
         echo ""
         echo "*************************************************************************************"
         sleep 5
 
-
-        echo "**** MAIN TRIGGER ****"
 
         # main routine
         prepare_node_interfaces
@@ -408,10 +367,8 @@ function source_config() {
 
 function build_node_from_source() {
 
-        echo "build_from_source"
-
         # daemon not found compile it
-        if [ ! -f ${NODE_DAEMON} ] || [ "$update" -eq 1 ]; then
+        if [ ! -f ${NODE_DAEMON} ]; then
                 # create code directory if it doesn't exist
                 if [ ! -d ${SCRIPTPATH}/${CODE_DIR} ]; then
                     mkdir -p ${SCRIPTPATH}/${CODE_DIR}              &>> ${SCRIPT_LOGFILE}
@@ -427,20 +384,8 @@ function build_node_from_source() {
                 echo "* Checking out desired GIT tag: ${release}"
                 git checkout ${release}                             &>> ${SCRIPT_LOGFILE}
 
-                if [ "$update" -eq 1 ]; then
-                    echo "update given, deleting the old daemon NOW!" &>> ${SCRIPT_LOGFILE}
-                    rm -f ${NODE_DAEMON}
-                    # old daemon must be removed before compilation. Would be better to remove it afterwards, however not possible with current structure
-                    if [ -f ${NODE_DAEMON} ]; then
-                            echo "UPDATE FAILED!"
-                            exit 1
-                    fi
-                fi
-
                 # compilation starts here
                 source ${SCRIPTPATH}/${CODENAME}.compile | pv -t -i0.1
-        else
-                echo "* Daemon already in place at ${NODE_DAEMON}, not compiling"
         fi
 
         # if it's not available after compilation, theres something wrong
@@ -457,32 +402,23 @@ function final_call() {
     echo "=> $(tput bold)$(tput setaf 2) All configuration files are in: ${NODE_CONF_BASE} $(tput sgr0)"
     echo "=> $(tput bold)$(tput setaf 2) All Data directories are in: ${NODE_DATA_BASE} $(tput sgr0)"
     echo ""
-    echo "$(tput bold)$(tput setaf 1)Important:$(tput sgr0) run $(tput setaf 2) /usr/local/bin/start_veil_nodes $(tput sgr0) as root to activate your nodes."
+    echo "$(tput bold)$(tput setaf 1)Important:$(tput sgr0) run $(tput setaf 2) ${NODE_HELPER} $(tput sgr0) as root to activate your nodes."
 
     # place future helper script accordingly on fresh install
-    cp ${SCRIPTPATH}/start_veil_nodes ${MNODE_HELPER}_${CODENAME}
-    echo "">> ${MNODE_HELPER}_${CODENAME}
+    cp ${SCRIPTPATH}/start_veil_nodes ${NODE_HELPER}
+    echo "">> ${NODE_HELPER}
 
     for NUM in $(seq 1 ${count}); do
-        echo "systemctl daemon-reload" >> ${MNODE_HELPER}_${CODENAME}
-        echo "systemctl enable ${CODENAME}_n${NUM}" >> ${MNODE_HELPER}_${CODENAME}
-        echo "systemctl restart ${CODENAME}_n${NUM}" >> ${MNODE_HELPER}_${CODENAME}
+        echo "systemctl daemon-reload" >> ${NODE_HELPER}
+        echo "systemctl enable ${CODENAME}_n${NUM}" >> ${NODE_HELPER}
+        echo "systemctl restart ${CODENAME}_n${NUM}" >> ${NODE_HELPER}
     done
 
-    chmod u+x ${MNODE_HELPER}_${CODENAME}
-
-    if [ "$startnodes" -eq 1 ]; then
-        echo ""
-        echo "** Your nodes are starting up."
-        ${MNODE_HELPER}_${CODENAME}
-    fi
+    chmod u+x ${NODE_HELPER}
     tput sgr0
     
 }
 
-#
-# /* no parameters, create the required network configuration. IPv6 is auto.  */
-#
 function prepare_node_interfaces() {
 
     echo "prepare interfaces"
@@ -498,11 +434,6 @@ function prepare_node_interfaces() {
         export ETH_INTERFACE="eth0"
     fi
 
-    # check for the nuse case <3
-    if [ -f /sys/class/net/ens160/operstate ]; then
-        export ETH_INTERFACE="ens160"
-    fi
-
     # get the current interface state
     ETH_STATUS=$(cat /sys/class/net/${ETH_INTERFACE}/operstate)
 
@@ -512,51 +443,7 @@ function prepare_node_interfaces() {
         exit 1
     fi
 
-    IPV6_INT_BASE="$(ip -6 addr show dev ${ETH_INTERFACE} | grep inet6 | awk -F '[ \t]+|/' '{print $3}' | grep -v ^fe80 | grep -v ^::1 | cut -f1-4 -d':' | head -1)" &>> ${SCRIPT_LOGFILE}
-
-    validate_netchoice
-    echo "IPV6_INT_BASE AFTER : ${IPV6_INT_BASE}" &>> ${SCRIPT_LOGFILE}
-
-    # user opted for ipv6 (default), so we have to check for ipv6 support
-    # check for vultr ipv6 box active
-    if [ -z "${IPV6_INT_BASE}" ] && [ ${net} -ne 4 ]; then
-        echo "No IPv6 support on the VPS but IPv6 is the setup default. Please switch to ipv4 with flag \"-n 4\" if you want to continue."
-        echo ""
-        echo "See the following link for instructions how to add multiple ipv4 addresses on vultr:"
-        echo "${IPV4_DOC_LINK}"
-        exit 1
-    fi
-
-    # generate the required ipv6 config
-    if [ "${net}" -eq 6 ]; then
-        # vultr specific, needed to work
-        sed -ie '/iface ${ETH_INTERFACE} inet6 auto/s/^/#/' ${NETWORK_CONFIG} &>> ${SCRIPT_LOGFILE}
-
-        # move current config out of the way first
-        cp ${NETWORK_CONFIG} ${NETWORK_CONFIG}.${DATE_STAMP}.bkp &>> ${SCRIPT_LOGFILE}
-
-        # create the additional ipv6 interfaces, rc.local because it's more generic
-        for NUM in $(seq 1 ${count}); do
-
-            # check if the interfaces exist
-            ip -6 addr | grep -qi "${IPV6_INT_BASE}:${NETWORK_BASE_TAG}::${NUM}"
-            if [ $? -eq 0 ]
-            then
-              echo "IP for node already exists, skipping creation" &>> ${SCRIPT_LOGFILE}
-            else
-              echo "Creating new IP address for ${CODENAME} node nr ${NUM}" &>> ${SCRIPT_LOGFILE}
-              if [ "${NETWORK_CONFIG}" = "/etc/rc.local" ]; then
-                # need to put network config in front of "exit 0" in rc.local
-                sed -e '$i ip -6 addr add '"${IPV6_INT_BASE}"':'"${NETWORK_BASE_TAG}"'::'"${NUM}"'/64 dev '"${ETH_INTERFACE}"'\n' -i ${NETWORK_CONFIG} &>> ${SCRIPT_LOGFILE}
-              else
-                # if not using rc.local, append normally
-                  echo "ip -6 addr add ${IPV6_INT_BASE}:${NETWORK_BASE_TAG}::${NUM}/64 dev ${ETH_INTERFACE}" >> ${NETWORK_CONFIG} &>> ${SCRIPT_LOGFILE}
-              fi
-              sleep 2
-              ip -6 addr add ${IPV6_INT_BASE}:${NETWORK_BASE_TAG}::${NUM}/64 dev ${ETH_INTERFACE} &>> ${SCRIPT_LOGFILE}
-            fi
-        done # end forloop
-    fi # end ifneteq6
+    export IPV4_ADDY=$(ifdata -pa ${ETH_INTERFACE})
 
 }
 
@@ -567,7 +454,7 @@ wipe=0;
 debug=0;
 
 # Execute getopt
-ARGS=$(getopt -o "h:n:c:r:wd" -l "help,net:,count:,wipe,debug" -n "install.sh" -- "$@");
+ARGS=$(getopt -o "h:c:r:wd" -l "help,count:,wipe,debug" -n "install.sh" -- "$@");
 
 eval set -- "$ARGS";
 
@@ -576,14 +463,6 @@ while true; do
         -h|--help)
             shift;
             # show help?!?
-            ;;
-        -n|--net)
-            shift;
-                    if [ -n "$1" ];
-                    then
-                        net="$1";
-                        shift;
-                    fi
             ;;
         -c|--count)
             shift;

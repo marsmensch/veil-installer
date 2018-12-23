@@ -319,14 +319,6 @@ function source_config() {
         echo "Script version ${SCRIPT_VERSION}, you picked: $(tput bold)$(tput setaf 2) ${project} $(tput sgr0), running on Ubuntu ${VERSION_ID}"
         echo "apply config file for ${project}"	&>> ${SCRIPT_LOGFILE}
 
-        # count is from the default config but can ultimately be
-        # overwritten at runtime
-        if [ -z "${count}" ]
-        then
-            count=${SETUP_NODES_COUNT}
-            echo "No number given, installing default number of nodes: ${SETUP_NODES_COUNT}" &>> ${SCRIPT_LOGFILE}
-        fi
-        
         #stop if the binary is already at the right place	
 	if [ -f ${NODE_DAEMON} ]; then
             echo "$(tput bold)$(tput setaf 1)Daemon already in place at ${NODE_DAEMON}, run ${0} -w to delete it and sync the chain from scratch.$(tput sgr0)"
@@ -336,7 +328,7 @@ function source_config() {
         echo "************************* Installation Plan *****************************************"
         echo ""
         echo "I am going to install and configure "
-        echo "$(tput bold)$(tput setaf 2) => ${count} ${project} node(s) in version ${release} $(tput sgr0)"
+        echo "$(tput bold)$(tput setaf 2) => ${count} ${project} node(s) in version ${SCVERSION} $(tput sgr0)"
         echo "for you now."
         echo ""
         echo "Stay tuned!"

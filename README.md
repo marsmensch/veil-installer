@@ -9,6 +9,7 @@ Easy. No options, just run `install.sh` after cloning the repo:
 `git clone https://github.com/marsmensch/veil-node-installer.git && cd veil-node-installer && ./install.sh`
 
 Start the node:
+
 `/usr/local/bin/start_veil_node`
 
 ## What happens behind the scenes?
